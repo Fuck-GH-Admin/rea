@@ -1,0 +1,64 @@
+name: Build REA offline bundle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout pinned REA commit and submodules
+        uses: actions/checkout@v4
+        with:
+          ref: 54906fdb1fc735b507961b2954f6968775cae4f6
+          fetch-depth: 0
+          submodules: recursive
+          path: rea
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.1
+          cache: npm
+          cache-dependency-path: rea/package-lock.json
+
+      - name: Install archive tool
+        run: sudo apt-get update && sudo apt-get install -y zstd
+
+      - name: Build and verify REA runtime
+        working-directory: rea
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 54906fdb1fc735b507961b2954f6968775cae4f6
+          npm ci
+          npm run build:cached
+          node scripts/rea.mjs --version
+          test -d dist
+          test -d node_modules
+          test -f scripts/rea.mjs
+
+      - name: Create offline runtime and source bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          git -C rea bundle create "$GITHUB_WORKSPACE/output/rea-fork-54906fd.git.bundle" --all
+          tar --exclude='.git' -I 'zstd -T0 -10' \
+            -cf output/rea-fork-54906fd-linux-x64-offline.tar.zst \
+            -C rea .
+          (cd output && sha256sum rea-fork-54906fd.git.bundle \
+            rea-fork-54906fd-linux-x64-offline.tar.zst > SHA256SUMS.txt)
+          (cd output && sha256sum -c SHA256SUMS.txt)
+          du -h output/*
+
+      - name: Publish downloadable workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea-fork-54906fd-linux-x64-offline
+          path: output/*
+          if-no-files-found: error
+          retention-days: 14
