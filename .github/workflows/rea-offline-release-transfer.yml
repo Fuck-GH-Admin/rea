@@ -1,0 +1,47 @@
+name: One-time REA offline Release-to-Artifact transfer
+on:
+  push:
+    branches:
+      - experiment/rea-offline-release-transfer-20261123
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: '001'
+            sha256: '41204be07c5265ae884ec0dfb92c2f54df7183fef39b6938e089ad3d1419ae3f'
+          - part: '002'
+            sha256: '9a79434a753ea160f639c8a0152dc23fc1ea0a23cb21d961374d24d509d3eb76'
+          - part: '003'
+            sha256: '32353118a664fd833aaebc530391ee306d427b2b80b60f273010e4cb85921c9d'
+          - part: '004'
+            sha256: '7b0dc71fa68f7170b32fed007605df24e077296f2bac9ae6a3c253672ca69038'
+    steps:
+      - name: Fetch original Release asset and verify bytes
+        env:
+          PART: ${{ matrix.part }}
+          EXPECTED: ${{ matrix.sha256 }}
+        run: |
+          set -euo pipefail
+          filename="REA-Offline-Kit-20261123-public.tar.gz.part-${PART}"
+          mkdir -p transfer
+          curl --fail --location --retry 4 --retry-all-errors --connect-timeout 20 --max-time 1300 \
+            "https://github.com/Fuck-GH-Admin/rea/releases/download/rea-offline-kit-20261123/${filename}" \
+            --output "transfer/${filename}"
+          echo "${EXPECTED}  transfer/${filename}" | sha256sum --check -
+      - name: Relay verified part as a short-lived Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea-local-transfer-${{ matrix.part }}
+          path: transfer/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
