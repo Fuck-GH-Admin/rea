@@ -1,0 +1,32 @@
+name: One-time Debian libGLES relay for isolated SOC smoke test
+on:
+  push:
+    branches:
+      - experiment/rea-offline-release-transfer-20261123
+    paths:
+      - .github/workflows/rea-soc-libgles-relay.yml
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch Debian 13 libGLES package and inspect metadata
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          curl --fail --location --retry 3 --connect-timeout 20 \
+            'https://deb.debian.org/debian/pool/main/libg/libglvnd/libgles2_1.7.0-1+b2_amd64.deb' \
+            -o 'out/libgles2_1.7.0-1+b2_amd64.deb'
+          dpkg-deb --field out/*.deb Package Version Architecture | tee out/package-fields.txt
+          test "$(dpkg-deb --field out/*.deb Package)" = libgles2
+          test "$(dpkg-deb --field out/*.deb Architecture)" = amd64
+          sha256sum out/*.deb | tee out/SHA256SUMS.txt
+      - name: Upload short-lived package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea-soc-graphics-libgles
+          path: out/
+          if-no-files-found: error
+          retention-days: 1
