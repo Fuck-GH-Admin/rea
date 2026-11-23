@@ -1,8 +1,5 @@
 name: One-time REA offline Release-to-Artifact transfer
 on:
-  push:
-    branches:
-      - experiment/rea-offline-release-transfer-20261123
   workflow_dispatch:
 
 permissions:
